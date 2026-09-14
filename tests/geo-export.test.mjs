@@ -1,0 +1,18 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {bboxPolygon,area,intersect,featureCollection} from '@turf/turf';
+import {fromArrayBuffer} from 'geotiff';
+import {makeGrid,normalizeWater} from '../src/geo.js';
+import {geoJSON,tiffBuffer,kml} from '../src/export.js';
+import {vector,parseCSV} from '../src/data.js';
+const p={name:'<test>',lat:0,lon:0,radius:1000,hours:1,n:16,depth:2,diffusion:0,mass:100,flow:.01,concentration:100,releaseHours:.5,decay:.2,settling:1,windage:0,background:1,backgroundKnown:true,release:'pulse',model:'tracer',start:'2026-01-01T00:00:00Z',forcingMode:'manual',waterType:'inland'};
+test('water polygon holes never appear in active cells',()=>{const w=normalizeWater({type:'Polygon',coordinates:[[[-.02,-.02],[.02,-.02],[.02,.02],[-.02,.02],[-.02,-.02]],[[.002,-.004],[.002,.004],[.005,.004],[.005,-.004],[.002,-.004]]]});const g=makeGrid(p,w);assert.ok(g.mask.includes(0));for(const geom of g.cells.filter(Boolean)){const cell={type:'Feature',properties:{},geometry:geom};assert.ok(Math.abs(area(intersect(featureCollection([cell,w])))/area(cell)-1)<1e-8);}});
+test('self-intersecting water is rejected',()=>assert.throws(()=>normalizeWater({type:'Polygon',coordinates:[[[0,0],[1,1],[0,1],[1,0],[0,0]]]})));
+test('GeoTIFF numeric raster round-trip preserves north-up, NoData and WGS84',async()=>{const g=makeGrid(p,bboxPolygon([-.02,-.02,.02,.02]));const values=Array.from({length:256},(_,i)=>i===0?null:i/10);const frame={seconds:0,values,budget:{}};const run={p,grid:g,result:{version:'test'},forcing:{meta:{}},waterMeta:{}};
+ const buffer=tiffBuffer(run,frame,'increment'),image=await (await fromArrayBuffer(buffer)).getImage(),raster=await image.readRasters();
+ assert.equal(image.getGeoKeys().GeographicTypeGeoKey,4326);assert.equal(image.getGDALNoData(),-9999);
+ assert.ok(Math.abs(raster[0][0]-24)<1e-5);assert.equal(raster[0][240],-9999);
+ const bbox=image.getBoundingBox();assert.ok(Math.abs(bbox[0]-g.west)<1e-10);assert.ok(Math.abs(bbox[3]-(g.south+16*g.dlat))<1e-10);
+ const geo=geoJSON(run,frame,'total');assert.equal(geo.features[0].properties.value,1.1);assert.ok(kml(run,frame,'increment').includes('&lt;test&gt;'));
+});
+test('current points toward direction; wind meteorological from reverses',()=>{assert.ok(Math.abs(vector(1,90).u-1)<1e-10);assert.ok(Math.abs(vector(1,0,true).v+1)<1e-10);});
+test('CSV timezones parsed, blanks rejected',()=>{assert.equal(parseCSV('time,u,v\n2026-01-01T08:00:00+08:00,0.1,0\n2026-01-01T09:00:00+08:00,0.1,0',p).rows[0].t,Date.parse(p.start)/1000);assert.throws(()=>parseCSV('time,u,v\n2026-01-01T00:00:00Z,,0\n2026-01-01T01:00:00Z,0,0',p));});

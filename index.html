@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="WaterModelling — simulasi screening dispersi perairan dengan data global, batas air, evaluasi titik, dan ekspor GIS.">
+<meta name="referrer" content="strict-origin-when-cross-origin"><title>WaterModelling · Dispersi perairan</title>
+<link rel="stylesheet" href="./leaflet.css"><link rel="stylesheet" href="./style.css"></head>
+<body>
+<header><a class="brand" href="./"><span class="brand-icon">≈</span><span>Water<span class="thin">Modelling</span><small>DISPERSI PERAIRAN</small></span></a><div class="head-right"><span class="badge">SCREENING · v0.1</span><button id="help" class="quiet">Metode & batasan</button><a class="quiet" href="https://github.com/claudesharing2-creator/WaterModelling" target="_blank" rel="noreferrer">GitHub ↗</a></div></header>
+<main>
+<aside aria-label="Pengaturan skenario">
+<div class="intro"><span class="eyebrow">RUANG KERJA</span><h1>Ke mana pencemar<br>akan bergerak?</h1><p>Tentukan sumber, perairan, dan waktu.<br>Telusuri hasil langsung di peta.</p></div>
+<form id="scenario">
+<fieldset><legend><span>01</span> Lokasi & waktu</legend>
+<label>Nama skenario<input id="name" maxlength="80" value="Skenario baru" required></label>
+<div class="pair"><label>Lintang<input id="lat" type="number" step="any" value="-5.1" min="-80" max="80" required></label><label>Bujur<input id="lon" type="number" step="any" value="119.3" min="-180" max="180" required></label></div>
+<button type="button" id="locate" class="secondary full">Tampilkan sumber di peta</button>
+<div class="pair"><label>Jenis perairan<select id="waterType"><option value="marine">Laut / pesisir</option><option value="inland">Sungai / danau</option></select></label><label>Radius domain (km)<input id="radius" type="number" min=".25" max="20" step=".25" value="3" required></label></div>
+<label>Mulai (UTC)<input id="start" type="datetime-local" required></label>
+<div class="pair"><label>Durasi (jam)<input id="hours" type="number" min=".25" max="168" step=".25" value="12" required></label><label>Grid<select id="n"><option value="32">32 × 32 · cepat</option><option value="48" selected>48 × 48 · standar</option><option value="72">72 × 72 · rapat</option></select></label></div>
+</fieldset>
+<fieldset><legend><span>02</span> Parameter & sumber</legend>
+<label>Modul perhitungan<select id="model"><option value="tracer">Tracer konservatif</option><option value="decay">Zat terlarut · peluruhan orde 1</option><option value="tss">TSS · pengendapan sederhana</option><option value="oil">Minyak permukaan · transport awal</option></select></label>
+<p id="modelNote" class="hint"></p>
+<div class="pair"><label>Pelepasan<select id="release"><option value="pulse">Sesaat</option><option value="continuous">Kontinu</option></select></label><label id="massWrap">Massa (kg)<input id="mass" type="number" min=".001" max="1000000000" step="any" value="100" required></label></div>
+<div id="continuousFields" hidden><div class="pair"><label>Debit (m³/s)<input id="flow" type="number" min="0" step="any" value=".01"></label><label>Sumber (mg/L)<input id="concentration" type="number" min="0" step="any" value="100"></label></div><label>Durasi pelepasan (jam)<input id="releaseHours" type="number" min=".001" max="168" step="any" value="2"></label></div>
+<div id="waterFields" class="pair"><label>Kedalaman campur (m)<input id="depth" type="number" min=".1" max="1000" step="any" value="3"></label><label>Latar (mg/L), opsional<input id="background" type="number" min="0" step="any" placeholder="Belum diketahui"></label></div>
+<div class="pair"><label>Dispersi K (m²/s)<input id="diffusion" type="number" min="0" max="500" step="any" value="2"></label><label id="decayWrap" hidden>k (hari⁻¹)<input id="decay" type="number" min="0" max="100" step="any" value=".2"></label><label id="settlingWrap" hidden>Kecepatan jatuh (m/hari)<input id="settling" type="number" min="0" max="1000" step="any" value="1"></label><label id="windageWrap" hidden>Faktor angin (0–0,1)<input id="windage" type="number" min="0" max=".1" step=".001" value=".03"></label></div>
+<details><summary>Parameter lain</summary><p>BOD–DO, nutrien, pH, logam, patogen dan weathering minyak memerlukan modul reaksi tersendiri. Belum tersedia pada versi ini; jangan menggantinya dengan tracer tanpa menyatakan asumsi.</p></details>
+</fieldset>
+<fieldset><legend><span>03</span> Arus & batas air</legend>
+<label>Sumber arus<select id="forcingMode"><option value="global">Data global · Open-Meteo</option><option value="manual">Asumsi manual · konstan</option><option value="csv">Unggah arus lokal · CSV</option></select></label>
+<div id="manualFields" hidden><div class="pair"><label>u timur (m/s)<input id="u" type="number" step="any" value=".1"></label><label>v utara (m/s)<input id="v" type="number" step="any" value="0"></label><label>Angin u (m/s)<input id="wu" type="number" step="any" value="0"></label><label>Angin v (m/s)<input id="wv" type="number" step="any" value="0"></label></div></div>
+<div id="csvFields" hidden><label>CSV arus<input id="csvFile" type="file" accept=".csv,text/csv"></label><button type="button" id="csvTemplate" class="quiet">Unduh contoh format CSV ↓</button></div>
+<button type="button" id="gather" class="secondary full">Ambil / periksa data arus</button>
+<div id="dataStatus" class="status">Data belum diperiksa.</div>
+<div class="button-row"><button type="button" id="waterAuto" class="secondary">Cari batas OSM</button><label class="button secondary">GeoJSON air<input id="waterFile" class="file-hidden" type="file" accept=".geojson,.json"></label></div>
+<div class="button-row"><button type="button" id="draw" class="quiet">Gambar batas air</button><button type="button" id="finishDraw" class="quiet" hidden>Selesai menggambar</button><button type="button" id="cancelDraw" class="quiet" hidden>Batal</button></div>
+<p id="waterStatus" class="hint">Batas air belum tersedia. GeoJSON harus berupa poligon air WGS84, dengan lubang untuk pulau.</p>
+<label class="check"><input id="confirmWater" type="checkbox">Saya sudah memeriksa batas air, pulau, dan tanggul pada peta.</label>
+<p class="hint">Pengambilan data mengirim koordinat ke Open-Meteo/Overpass. Basemap mengirim permintaan tile OSM. Skenario tidak disimpan ke server aplikasi.</p>
+</fieldset>
+<button type="submit" id="run" class="primary full">Jalankan simulasi <span>→</span></button><button type="button" id="cancel" class="secondary full" hidden>Hentikan simulasi</button>
+<progress id="progress" max="1" value="0" hidden></progress>
+<p id="notice" role="status" aria-live="polite">Siapkan skenario untuk memulai.</p>
+</form>
+<div class="aside-bottom"><button id="demo" class="quiet">Coba demo sintetis</button><label class="button quiet">Buka skenario<input id="scenarioFile" type="file" accept=".json" class="file-hidden"></label></div>
+</aside>
+<section class="workspace" aria-label="Peta dan hasil">
+<div class="map-area"><div id="map" aria-label="Peta perairan"></div>
+<div class="map-tools"><button id="pickSource" class="map-button">⊕ Pilih sumber</button><button id="inspect" class="map-button active">⌖ Periksa titik</button><button id="fit" class="map-button">↗ Domain</button></div>
+<div class="map-caption"><span class="dot"></span><span id="mapCaption">Tampilan lokasi · belum ada simulasi</span></div>
+<div class="legend" id="legend" hidden><strong id="legendTitle">Tambahan konsentrasi</strong><div class="gradient"></div><div class="legend-ends"><span>0</span><span id="legendMax">—</span></div><label>Transparansi<input id="opacity" type="range" min=".15" max=".9" step=".05" value=".65"></label></div>
+</div>
+<section class="results" aria-label="Hasil simulasi">
+<div class="results-head"><div><span class="eyebrow">HASIL SIMULASI</span><h2 id="resultTitle">Peta yang bisa ditelusuri</h2></div><span id="quality" class="badge subtle">Belum dihitung</span></div>
+<div id="empty"><p>Hasil sebaran, perubahan terhadap waktu, dan konsentrasi titik akan muncul di sini.</p><p class="hint">Demo menggunakan kanal dan arus sintetis untuk mencoba alur aplikasi.</p></div>
+<div id="resultContent" hidden>
+<div class="timeline"><button id="play" class="secondary" aria-label="Putar animasi">Putar</button><input id="time" aria-label="Waktu hasil" type="range" min="0" max="48" value="0"><output id="timeLabel"></output></div>
+<div class="metrics"><div><small id="maxLabel">Puncak saat ini</small><strong id="maxValue">—</strong></div><div><small>Massa dalam air</small><strong id="massValue">—</strong></div><div><small>Keluar domain</small><strong id="escapedValue">—</strong></div><div><small>Galat neraca</small><strong id="errorValue">—</strong></div></div>
+<p id="balanceNote" class="hint"></p>
+<div class="result-options"><label>Tampilan<select id="valueMode"><option value="increment">Tambahan sumber</option><option value="total">Total + latar tetap</option></select></label><label>Ambang evaluasi<input id="threshold" type="number" min="0" step="any" placeholder="Opsional"></label></div>
+<div class="probe"><div><h3>Titik evaluasi</h3><p id="probeLabel">Klik sel air pada peta untuk melihat deret waktu.</p></div><div class="pair"><label>Lintang<input id="probeLat" type="number" step="any"></label><label>Bujur<input id="probeLon" type="number" step="any"></label></div><button id="probeGo" class="secondary">Periksa koordinat</button><div id="probeStats"></div><svg id="chart" viewBox="0 0 600 130" role="img" aria-label="Grafik konsentrasi terhadap waktu"></svg></div>
+<div class="exports"><span class="eyebrow">EKSPOR</span><button id="exportGeo" class="secondary">GeoJSON</button><button id="exportTif" class="secondary">GeoTIFF + metadata</button><button id="exportKml" class="secondary">KMZ / Earth</button><button id="exportCSV" class="secondary">CSV titik</button><button id="save" class="secondary">Skenario JSON</button><button id="report" class="primary">Laporan / PDF</button></div>
+<p class="hint">GeoJSON, GeoTIFF dan KMZ mengekspor waktu terpilih. JSON menyimpan seluruh waktu. Hasil adalah screening 2D; bukan hasil uji laboratorium.</p>
+</div></section>
+</section></main>
+<dialog id="helpDialog"><button id="closeHelp" class="close" aria-label="Tutup">×</button><span class="eyebrow">METODE & CAKUPAN</span><h2>Transparan tentang apa yang dihitung.</h2><p>Mesin finite-volume 2D menghitung massa dari sumber dengan adveksi upwind dan difusi. Arus seragam secara spasial, dapat berubah terhadap waktu. Kedalaman campur tetap dan tercampur merata vertikal.</p><p>Hanya sel yang seluruhnya berada dalam poligon air yang diaktifkan. Batas darat impermeabel; tepi kotak domain terbuka untuk massa keluar. Tidak ada solver hidrodinamika lokal, wetting/drying, atau pasang yang mengubah volume.</p><p>Mode global mengambil arus per jam sekitar 8 km. Angin hanya dipakai pada modul minyak. SST, gelombang dan muka laut adalah konteks. Grid visual lebih rapat tidak meningkatkan ketelitian arus global.</p><p>Level 2 tersedia sebagai masukan CSV lokal, tanpa klaim kalibrasi. Level 3, BOD–DO, nutrien, pH, logam, patogen dan OpenOil penuh adalah pengembangan berikutnya.</p><p>Minyak menggunakan transport massa permukaan g/m². Tanpa weathering dan beaching; akumulasi dekat batas belum berarti minyak terdampar. TSS hanya settling tanpa resuspensi.</p><p>Poligon air yang keliru tetap dapat menghasilkan domain keliru. Periksa pulau, tanggul, lebar kanal dan tanggal garis pantai. Sel tepi yang belum terwakili adalah NoData.</p><p>Open-Meteo free endpoint ditujukan untuk penggunaan nonkomersial sesuai ketentuan penyedia. Penggunaan operasional/komersial perlu konfigurasi layanan yang sesuai.</p><p><a href="./docs/METHODS.md" target="_blank" rel="noreferrer">Dokumentasi metode & referensi ↗</a></p></dialog>
+<noscript>Aplikasi membutuhkan JavaScript untuk menampilkan peta dan menghitung simulasi.</noscript><script type="module" src="./app.js"></script>
+</body></html>
