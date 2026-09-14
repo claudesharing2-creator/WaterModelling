@@ -1,4 +1,4 @@
-import {writeArrayBuffer} from 'geotiff';
+import {writeFloatGeoTIFF} from './tiff.js';
 import {zipSync,strToU8} from 'fflate';
 import {MODELS} from './engine.js';
 export const escapeXML=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
@@ -15,7 +15,7 @@ export function tiffBuffer(run,frame,mode){
  for(let row=0;row<g.n;row++)for(let col=0;col<g.n;col++){
  const v=displayValue(frame.values[(g.n-1-row)*g.n+col],run,mode);values[row*g.n+col]=v===null?-9999:v;
  }
- return writeArrayBuffer(values,{width:g.n,height:g.n,BitsPerSample:[32],SampleFormat:[3],SamplesPerPixel:1,PhotometricInterpretation:1,ModelPixelScale:[g.dlon,g.dlat,0],ModelTiepoint:[0,0,0,g.west,g.south+g.n*g.dlat,0],GTModelTypeGeoKey:2,GTRasterTypeGeoKey:1,GeographicTypeGeoKey:4326,GeogCitationGeoKey:'WGS 84',GDAL_NODATA:'-9999'});
+ return writeFloatGeoTIFF(values,g.n,g.n,g.west,g.south+g.n*g.dlat,g.dlon,g.dlat);
 }
 export function kml(run,frame,mode){
  const geo=geoJSON(run,frame,mode),e=escapeXML,meta=geo.metadata;
