@@ -40,7 +40,7 @@ Uji browser:
 npx playwright install chromium
 npm run test:e2e
 ```
-Dependencies langsung dipin di package.json. npm install menyelesaikan dependency transitif; commit package-lock.json hasil instalasi lokal untuk mengunci seluruh rantai pada pengembangan lanjutan.
+Dependencies langsung dan transitif dikunci dalam package-lock.json. CI menggunakan npm ci agar versi instalasi konsisten.
 
 ## Alur penggunaan
 1. Isi koordinat WGS84, waktu UTC, jenis perairan, domain dan parameter.
